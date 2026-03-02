@@ -57,6 +57,7 @@ git clone https://github.com/YusukeKimata-Moo/pubmed-search-skill.git ~/.agents/
 4. The agent shows **hit counts only** — you decide if the scope is right
 5. You select a query to execute
 6. The agent runs the search and presents results
+7. After presenting, the agent will **ask if you want to save the results to a file** (CSV or Markdown)
 
 ### CLI Reference
 
@@ -67,8 +68,9 @@ The agent calls the script internally, but you can also use it directly:
 echo '"CRISPR"[TI] AND "review"[PT]' > /tmp/q.txt
 
 python scripts/pubmed_search.py count --query-file /tmp/q.txt                  # Count hits
-python scripts/pubmed_search.py search --query-file /tmp/q.txt --max 20        # Search (JSON)
-python scripts/pubmed_search.py --format markdown search --query-file /tmp/q.txt --max 50  # Markdown
+python scripts/pubmed_search.py search --query-file /tmp/q.txt --max 20        # Search (JSON to stdout)
+python scripts/pubmed_search.py --format markdown --output results.md search --query-file /tmp/q.txt --max 50  # Save as Markdown
+python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/q.txt --max 50      # Save as CSV
 python scripts/pubmed_search.py --format markdown fetch 32553272               # Fetch details
 python scripts/pubmed_search.py count "simple query"                           # Direct query (simple)
 ```

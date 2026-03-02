@@ -4,6 +4,8 @@ PubMed search client using NCBI E-utilities API.
 """
 
 import argparse
+import csv
+import io
 import json
 import os
 import sys
@@ -221,6 +223,21 @@ def _extract_doi(elocationid: str) -> str:
     return ""
 
 
+def format_csv_summary(items: list) -> str:
+    """Format search results as CSV."""
+    if not items:
+        return ""
+    output = io.StringIO()
+    fieldnames = ["pmid", "title", "authors", "journal", "year", "doi", "abstract"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for item in items:
+        row = item.copy()
+        row["authors"] = "; ".join(item.get("authors", []))
+        writer.writerow(row)
+    return output.getvalue()
+
+
 def format_markdown_summary(items: list) -> str:
     """Format search results as markdown."""
     lines = []
@@ -318,8 +335,12 @@ def main():
         description="PubMed search via NCBI E-utilities API",
     )
     parser.add_argument(
-        "--format", choices=["json", "markdown"], default="json",
+        "--format", choices=["json", "markdown", "csv"], default="json",
         help="Output format (default: json)",
+    )
+    parser.add_argument(
+        "--output", "-o", dest="output_file", default=None,
+        help="Write output to a file instead of stdout (handles encoding automatically)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
@@ -353,15 +374,17 @@ def main():
         sys.exit(1)
 
     output_format = args.format
+    output_text = ""
 
     if args.command == "count":
         query = _resolve_query(args)
         count = esearch_count(query)
         if output_format == "json":
-            print(json.dumps({"query": query, "count": count}, indent=2))
+            output_text = json.dumps({"query": query, "count": count}, indent=2)
+        elif output_format == "csv":
+            output_text = f"query,count\n\"{query.replace('\"', '\"\"')}\",{count}"
         else:
-            print(f"**Query**: `{query}`")
-            print(f"**Hit count**: {count:,}")
+            output_text = f"**Query**: `{query}`\n**Hit count**: {count:,}"
 
     elif args.command == "search":
         query = _resolve_query(args)
@@ -385,32 +408,47 @@ def main():
                     time.sleep(0.34)  # Rate limit: 3 req/sec
 
         if output_format == "json":
-            print(json.dumps({
+            output_text = json.dumps({
                 "query": query,
                 "query_translation": query_translation,
                 "total_count": count,
                 "returned": len(items),
                 "items": items,
-            }, indent=2, ensure_ascii=False))
+            }, indent=2, ensure_ascii=False)
+        elif output_format == "csv":
+            output_text = format_csv_summary(items)
         else:
-            print(f"# PubMed Search Results\n")
-            print(f"**Query**: `{query}`")
+            lines = []
+            lines.append(f"# PubMed Search Results\n")
+            lines.append(f"**Query**: `{query}`")
             if query_translation:
-                print(f"**Translated query**: `{query_translation}`")
-            print(f"**Total hits**: {count:,} | **Showing**: {len(items)}\n")
-            print(format_markdown_summary(items))
+                lines.append(f"**Translated query**: `{query_translation}`")
+            lines.append(f"**Total hits**: {count:,} | **Showing**: {len(items)}\n")
+            lines.append(format_markdown_summary(items))
+            output_text = "\n".join(lines)
 
     elif args.command == "fetch":
         item = efetch_abstract(args.pmid)
         if item:
             if output_format == "json":
-                print(json.dumps(item, indent=2, ensure_ascii=False))
+                output_text = json.dumps(item, indent=2, ensure_ascii=False)
+            elif output_format == "csv":
+                output_text = format_csv_summary([item])
             else:
-                print(format_markdown_detail(item))
+                output_text = format_markdown_detail(item)
         else:
             print(f"PMID {args.pmid} not found.", file=sys.stderr)
             sys.exit(1)
 
+    # Write output to file or stdout
+    if args.output_file:
+        with open(args.output_file, "w", encoding="utf-8") as f:
+            f.write(output_text)
+            if not output_text.endswith("\n"):
+                f.write("\n")
+        print(f"Saved results to {args.output_file}", file=sys.stderr)
+    else:
+        print(output_text)
 
 if __name__ == "__main__":
     main()

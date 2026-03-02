@@ -14,6 +14,8 @@ Search PubMed via the official NCBI E-utilities API. No API key required for bas
 
 ## Workflow
 
+> **CRITICAL MANDATORY RULE**: You MUST NEVER execute a full `search` without first showing the user the hit `count` and getting their explicit approval for the number of results. Do not preemptively retrieve abstracts or paper lists. ALWAYS present hit counts first.
+
 When a user requests a PubMed search, follow this workflow:
 
 ### Step 1: Understand the Research Topic
@@ -54,7 +56,10 @@ Wait for user approval before proceeding. If the user requests modifications, up
 
 After user approves the queries, write each to a temporary file and run `count`. **Show only the hit counts — do NOT execute the full search yet.**
 
+_You may auto-run the file creation and `count` commands without asking the user for permission._
+
 ```bash
+// turbo
 # Write query to a temp file to avoid shell quoting issues
 echo '<query>' > /tmp/pubmed_q.txt
 python scripts/pubmed_search.py --format markdown count --query-file /tmp/pubmed_q.txt
@@ -76,11 +81,13 @@ Which query to execute? (A/B/C, or I can adjust)
 
 ### Search Query Design Guidelines
 
+> **CRITICAL: Avoid overly restrictive queries.** Users often provide a concise keyword, but you should expand the search using `OR` to include related biological concepts, synonyms, and associated processes (e.g., if the user asks for "asymmetric division", include "polarity").
+
 **Narrow (target: ≤10 hits)**: Specific MeSH [MH] or title [TI] terms, multiple AND, organism/method filters.
 
-**Moderate (target: 20-50 hits)**: MeSH + free-text [TIAB], date/type filters.
+**Moderate (target: 20-50 hits)**: MeSH + free-text [TIAB], date/type filters. Use `OR` to include related keywords and synonyms to ensure relevant papers aren't missed.
 
-**Broad (target: 100-200 hits)**: General terms, fewer AND, no date restriction.
+**Broad (target: 100-200 hits)**: General terms, fewer AND, no date restriction. Actively expand the scope to related pathways, anatomical structures, or broader concepts.
 
 ### Useful PubMed Search Fields
 
@@ -107,7 +114,10 @@ Wait for the user to review the hit counts and decide:
 
 After user approves a query:
 
+_You may auto-run the search command below without asking._
+
 ```bash
+// turbo
 python scripts/pubmed_search.py --format markdown search --query-file /tmp/pubmed_q.txt --max <N>
 ```
 
@@ -117,8 +127,22 @@ Recommended `--max` values: Narrow=20, Moderate=50, Broad=200.
 
 Show results in a readable format. For key papers, fetch full details:
 
+_You may auto-run the fetch command below without asking._
+
 ```bash
+// turbo
 python scripts/pubmed_search.py --format markdown fetch <PMID>
+```
+
+### Step 7: Ask to Save Results
+
+After presenting the search results, **always ask the user** if they would like to save the retrieved results to a file (e.g., as `.csv` or `.md`).
+
+If the user agrees, run the following command to save the results directly. You may auto-run this without further asking.
+
+```bash
+// turbo
+python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/pubmed_q.txt --max <N>
 ```
 
 ## CLI Commands
@@ -132,8 +156,12 @@ echo '"CRISPR"[TI] AND "review"[PT]' > /tmp/q.txt
 # Count hits
 python scripts/pubmed_search.py count --query-file /tmp/q.txt
 
-# Search with results
+# Search with results (Markdown format)
 python scripts/pubmed_search.py --format markdown search --query-file /tmp/q.txt --max 20
+
+# Search and save to file (CSV or Markdown) to avoid encoding issues in terminal
+python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/q.txt --max 20
+python scripts/pubmed_search.py --format markdown --output results.md search --query-file /tmp/q.txt --max 20
 
 # Fetch details for a specific paper
 python scripts/pubmed_search.py --format markdown fetch 32553272
