@@ -145,6 +145,14 @@ If the user agrees, run the following command to save the results directly. You 
 python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/pubmed_q.txt --max <N>
 ```
 
+### Step 8: Ask to Delete Intermediate Files
+
+After the search workflow is complete and any requested result saving is handled, **always ask the user** whether to delete intermediate files created during the workflow, such as temporary query files or scratch output files.
+
+Only delete these intermediate files after the user explicitly agrees. Do not delete saved search results unless the user specifically asks for that.
+
+When deleting files, state which files will be removed before running the deletion command.
+
 ## CLI Commands
 
 All commands support `--query-file` to read the query from a file (recommended for complex queries with quotes/spaces):
