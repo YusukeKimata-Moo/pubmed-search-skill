@@ -1,20 +1,20 @@
 ---
 name: pubmed-search
 description: >-
-  Search PubMed for molecular biology and biomedical research papers using NCBI E-utilities API.
-  Use when the user requests: searching PubMed for papers, finding references on a specific topic,
-  building a bibliography, looking up papers by author/keyword/DOI, or retrieving paper abstracts
-  and metadata from PubMed. Triggers on mentions of "PubMed", "literature search", "find papers",
-  "search for references", or requests to look up biomedical literature.
+  Search PubMed for biomedical papers by topic, author, or DOI with query approval and hit-count preview;
+  retrieve metadata and abstracts by PMID. Use for PubMed or biomedical reference retrieval,
+  not private-library searches, manuscript citation evaluation, or merely discussing PubMed.
 ---
 
 # PubMed Search
 
 Search PubMed via the official NCBI E-utilities API. No API key required for basic use (≤3 req/sec).
 
+Use `literature-scout` when the task requires evaluating references against manuscript claims or comparing sources, and `readcube-papers` for the user's saved library. PMC full text, citation matching, and cross-database links belong to `pubmed-database` when available; do not switch skills merely to bypass this workflow's approval gates.
+
 ## Workflow
 
-> **CRITICAL MANDATORY RULE**: You MUST NEVER execute a full `search` without first showing the user the hit `count` and getting their explicit approval for the number of results. Do not preemptively retrieve abstracts or paper lists. ALWAYS present hit counts first.
+For discovery searches, obtain query approval, show the hit `count`, then obtain explicit approval of the selected query and retrieval size before running `search` or fetching candidate abstracts. Do not retrieve paper lists preemptively. A direct request for an already supplied PMID may use `fetch` without a discovery search.
 
 When a user requests a PubMed search, follow this workflow:
 
@@ -28,79 +28,11 @@ Clarify the user's search intent:
 
 ### Step 2: Propose Search Queries for Approval
 
-Design 1–3 PubMed search queries at different specificity levels. **Before running any queries, present them to the user with explanations** for approval. Also ask whether to include or exclude review articles.
-
-Present in this format:
-
----
-
-**Your topic**: [user's topic]
-
-**Proposed queries**:
-
-| #     | Query              | Explanation                       |
-| ----- | ------------------ | --------------------------------- |
-| **A** | `[specific query]` | [why this query, what it targets] |
-| **B** | `[balanced query]` | [why this query, what it targets] |
-| **C** | `[wide query]`     | [why this query, what it targets] |
-
-**Review articles**: Include or exclude? (adding `NOT "Review"[PT]` to exclude)
-
-Shall I proceed with these queries? (or suggest modifications)
-
----
-
-Wait for user approval before proceeding. If the user requests modifications, update the queries and re-present.
+When designing or adjusting queries, read [search-design.md](references/search-design.md) for synonym expansion, scope targets, and field tags. Present 1–3 queries at different specificity levels with brief explanations and obtain approval before running them. Confirm whether to include reviews if not already specified. If the user requests modifications, update the queries and re-present.
 
 ### Step 3: Show Hit Counts
 
-After user approves the queries, write each to a temporary file and run `count`. **Show only the hit counts — do NOT execute the full search yet.**
-
-_You may auto-run the file creation and `count` commands without asking the user for permission._
-
-```bash
-// turbo
-# Write query to a temp file to avoid shell quoting issues
-echo '<query>' > /tmp/pubmed_q.txt
-python scripts/pubmed_search.py --format markdown count --query-file /tmp/pubmed_q.txt
-```
-
-Present results:
-
----
-
-| Strategy | Hits |
-| -------- | ---- |
-| **A**    | N    |
-| **B**    | N    |
-| **C**    | N    |
-
-Which query to execute? (A/B/C, or I can adjust)
-
----
-
-### Search Query Design Guidelines
-
-> **CRITICAL: Avoid overly restrictive queries.** Users often provide a concise keyword, but you should expand the search using `OR` to include related biological concepts, synonyms, and associated processes (e.g., if the user asks for "asymmetric division", include "polarity").
-
-**Narrow (target: ≤10 hits)**: Specific MeSH [MH] or title [TI] terms, multiple AND, organism/method filters.
-
-**Moderate (target: 20-50 hits)**: MeSH + free-text [TIAB], date/type filters. Use `OR` to include related keywords and synonyms to ensure relevant papers aren't missed.
-
-**Broad (target: 100-200 hits)**: General terms, fewer AND, no date restriction. Actively expand the scope to related pathways, anatomical structures, or broader concepts.
-
-### Useful PubMed Search Fields
-
-| Tag      | Field               | Example                     |
-| -------- | ------------------- | --------------------------- |
-| `[TI]`   | Title only          | `"apoptosis"[TI]`           |
-| `[TIAB]` | Title + Abstract    | `"Western blot"[TIAB]`      |
-| `[AU]`   | Author              | `"Yamanaka S"[AU]`          |
-| `[MH]`   | MeSH heading        | `"Signal Transduction"[MH]` |
-| `[PT]`   | Publication type    | `"Review"[PT]`              |
-| `[DP]`   | Date of publication | `"2020/01:2024/12"[DP]`     |
-| `[LA]`   | Language            | `"English"[LA]`             |
-| `[JT]`   | Journal title       | `"Nature"[JT]`              |
+After query approval, write each query to a temporary file and run `count` using the CLI below. File creation and counting need no additional approval. Show the query labels and hit counts only; do not run `search` yet.
 
 ### Step 4: User Reviews Hit Counts
 
@@ -112,13 +44,10 @@ Wait for the user to review the hit counts and decide:
 
 ### Step 5: Execute Search
 
-After user approves a query:
-
-_You may auto-run the search command below without asking._
+After the user approves the displayed count, selected query, and retrieval size, run the search without asking again:
 
 ```bash
-// turbo
-python scripts/pubmed_search.py --format markdown search --query-file /tmp/pubmed_q.txt --max <N>
+python scripts/pubmed_search.py --format markdown search --query-file "<query-file>" --max <N>
 ```
 
 Recommended `--max` values: Narrow=20, Moderate=50, Broad=200.
@@ -127,22 +56,18 @@ Recommended `--max` values: Narrow=20, Moderate=50, Broad=200.
 
 Show results in a readable format. For key papers, fetch full details:
 
-_You may auto-run the fetch command below without asking._
-
 ```bash
-// turbo
 python scripts/pubmed_search.py --format markdown fetch <PMID>
 ```
 
 ### Step 7: Ask to Save Results
 
-After presenting the search results, **always ask the user** if they would like to save the retrieved results to a file (e.g., as `.csv` or `.md`).
+After presenting the search results, ask whether to save them as `.csv` or `.md` if the user has not already specified this.
 
 If the user agrees, run the following command to save the results directly. You may auto-run this without further asking.
 
 ```bash
-// turbo
-python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/pubmed_q.txt --max <N>
+python scripts/pubmed_search.py --format csv --output results.csv search --query-file "<query-file>" --max <N>
 ```
 
 ### Step 8: Ask to Delete Intermediate Files
@@ -155,40 +80,32 @@ When deleting files, state which files will be removed before running the deleti
 
 ## CLI Commands
 
-All commands support `--query-file` to read the query from a file (recommended for complex queries with quotes/spaces):
+Resolve `scripts/` from this skill directory. `python` below means the host's configured interpreter, not necessarily a command on PATH. `count` and `search` accept `--query-file`; `fetch` accepts a PMID instead. Global `--format` and `--output` options precede the subcommand.
+
+Write the query as a single UTF-8 line without BOM; the script reads only the first line. On Windows PowerShell, always use `--query-file`: quotes and spaces in direct query arguments can be mangled, and default file redirection may use the wrong encoding. Use the host's UTF-8 file-writing method and a valid temporary path, not an assumed `/tmp` directory.
 
 ```bash
-# Write query to file (avoids shell quoting issues)
-echo '"CRISPR"[TI] AND "review"[PT]' > /tmp/q.txt
-
 # Count hits
-python scripts/pubmed_search.py count --query-file /tmp/q.txt
+python scripts/pubmed_search.py count --query-file "<query-file>"
 
 # Search with results (Markdown format)
-python scripts/pubmed_search.py --format markdown search --query-file /tmp/q.txt --max 20
+python scripts/pubmed_search.py --format markdown search --query-file "<query-file>" --max 20
 
 # Search and save to file (CSV or Markdown) to avoid encoding issues in terminal
-python scripts/pubmed_search.py --format csv --output results.csv search --query-file /tmp/q.txt --max 20
-python scripts/pubmed_search.py --format markdown --output results.md search --query-file /tmp/q.txt --max 20
+python scripts/pubmed_search.py --format csv --output results.csv search --query-file "<query-file>" --max 20
+python scripts/pubmed_search.py --format markdown --output results.md search --query-file "<query-file>" --max 20
 
 # Fetch details for a specific paper
 python scripts/pubmed_search.py --format markdown fetch 32553272
 
 # Sort options: relevance (default), pub_date, first_author
-python scripts/pubmed_search.py search --query-file /tmp/q.txt --max 30 --sort pub_date
-
-# Direct query (simple queries without special chars)
-python scripts/pubmed_search.py count "simple query"
+python scripts/pubmed_search.py search --query-file "<query-file>" --max 30 --sort pub_date
 ```
 
-> **Note (Windows)**: On PowerShell, PubMed queries containing double quotes and spaces are mangled by the shell. Always use `--query-file` instead of passing queries directly on the command line.
+`--output` writes UTF-8 without BOM. If the host requires Excel-compatible CSV (`utf-8-sig`), add the BOM to the saved CSV before delivery; do not apply it to query files.
 
 ## Optional: API Key
 
-For heavy use (>3 req/sec), set an NCBI API key:
-
-```bash
-export NCBI_API_KEY="your_api_key"
-```
+For heavy use (>3 req/sec), the script accepts an existing `NCBI_API_KEY` environment variable. Have the user configure a key privately if needed; do not print it or write it into the skill.
 
 Get one at https://www.ncbi.nlm.nih.gov/account/settings/
